@@ -69,6 +69,19 @@ over your custom appchain, tailored to your specific requirements.
 Madara is designed to empower a multitude of projects, fueling
 growth within the Starknet ecosystem.
 
+## Moro
+
+**Moro** is the carbonable fork of [Madara](https://github.com/keep-starknet-strange/madara) to enable carbon compensation at sequencer core's level.
+
+Use it to create a carbon neutral chain/appchain.
+
+### 📝 Todo
+- [ ] Deploy carbonable-protocol in Moro genesis
+- [ ] Buy order every 100 blocks to compensate those blocks transactions
+- [ ] Split tx fees (95% for the sequencer host and 5% to compensate)
+- [ ] Upgrade starknet's pallet to calculate the amount required to compensate last block
+
+
 ## 🌟 Features
 
 - Starknet sequencer 🐺
