@@ -1,7 +1,7 @@
 <!-- prettier-ignore-start -->
 <!-- markdownlint-disable -->
 <div align="center">
-  <img src="docs/images/madara-no-bg.png" height="256">
+  <img src="docs/images/moro_project.jpg" height="256">
 </div>
 
 <div align="center">
