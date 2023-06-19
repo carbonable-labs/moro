@@ -7,6 +7,24 @@ use starknet_api::stdlib::collections::HashMap;
 
 use crate::execution::types::{ContractAddressWrapper, Felt252Wrapper};
 use crate::traits::hash::HasherT;
+#[derive(
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    scale_codec::Encode,
+    scale_codec::Decode,
+    scale_info::TypeInfo,
+    Default,
+    scale_codec::MaxEncodedLen,
+)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+pub struct Resources {
+    pub l1_gas: u64,
+    pub steps: u64,
+    pub pedersen: u64,
+    pub range_check: u64,
+}
 
 #[derive(
     Clone,
@@ -44,6 +62,8 @@ pub struct Header {
     pub protocol_version: Option<u8>,
     /// Extraneous data that might be useful for running transactions
     pub extra_data: Option<U256>,
+    /// Sum of the block tx resources
+    pub total_resources: Resources,
 }
 
 impl Header {
@@ -62,6 +82,7 @@ impl Header {
         event_commitment: Felt252Wrapper,
         protocol_version: Option<u8>,
         extra_data: Option<U256>,
+        total_resources: Resources,
     ) -> Self {
         Self {
             parent_block_hash,
@@ -75,6 +96,7 @@ impl Header {
             event_commitment,
             protocol_version,
             extra_data,
+            total_resources,
         }
     }
 

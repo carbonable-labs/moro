@@ -66,15 +66,16 @@ use alloc::str::from_utf8_unchecked;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
+use core::primitive::str;
 
 use blockifier::block_context::BlockContext;
 use blockifier::execution::entry_point::{CallInfo, ExecutionResources};
 use blockifier_state_adapter::BlockifierStateAdapter;
 use frame_support::pallet_prelude::*;
-use frame_support::traits::Time;
+use frame_support::traits::{OriginTrait, Time};
 use frame_system::pallet_prelude::*;
 use mp_digest_log::MADARA_ENGINE_ID;
-use mp_starknet::block::{Block as StarknetBlock, Header as StarknetHeader, MaxTransactions};
+use mp_starknet::block::{Block as StarknetBlock, Header as StarknetHeader, MaxTransactions, Resources};
 use mp_starknet::crypto::commitment;
 use mp_starknet::execution::types::{
     CallEntryPointWrapper, ClassHashWrapper, ContractAddressWrapper, ContractClassWrapper, EntryPointTypeWrapper,
@@ -86,7 +87,10 @@ use mp_starknet::transaction::types::{
     DeclareTransaction, DeployAccountTransaction, EventError, EventWrapper as StarknetEventType, InvokeTransaction,
     Transaction, TransactionExecutionInfoWrapper, TransactionReceiptWrapper, TxType,
 };
-use sp_runtime::traits::UniqueSaturatedInto;
+use serde::{Deserialize, Serialize};
+use sp_io::offchain_index;
+use sp_runtime::offchain::storage::StorageValueRef;
+use sp_runtime::traits::{SaturatedConversion, UniqueSaturatedInto};
 use sp_runtime::DigestItem;
 use starknet_api::api_core::{ChainId, ContractAddress};
 use starknet_api::block::{BlockNumber, BlockTimestamp};
@@ -116,6 +120,24 @@ macro_rules! log {
 			concat!("[{:?}] 🐺 ", $pattern), <frame_system::Pallet<T>>::block_number() $(, $values)*
 		)
 	};
+}
+
+#[derive(
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    scale_codec::Encode,
+    scale_codec::Decode,
+    scale_info::TypeInfo,
+    Default,
+    scale_codec::MaxEncodedLen,
+)]
+pub struct CarbonOffset {
+    l1_gas: u64,
+    steps: u64,
+    pedersen_builtin: u64,
+    range_check_builtin: u64,
 }
 
 #[frame_support::pallet]
@@ -186,6 +208,11 @@ pub mod pallet {
         fn offchain_worker(n: T::BlockNumber) {
             log!(info, "Running offchain worker at block {:?}.", n);
 
+            Self::set_carbon_offset(
+                OriginFor::<T>::none(),
+                CarbonOffset { l1_gas: 11, steps: 3, ..Default::default() },
+            );
+
             match Self::process_l1_messages() {
                 Ok(_) => log!(info, "Successfully executed L1 messages"),
                 Err(err) => match err {
@@ -197,6 +224,10 @@ pub mod pallet {
             }
         }
     }
+
+    #[pallet::storage]
+    #[pallet::getter(fn carbon_offsetting)]
+    pub(super) type CarbonOffsetting<T: Config> = StorageValue<_, CarbonOffset, ValueQuery>;
 
     /// The Starknet pallet storage items.
     /// STORAGE
@@ -417,7 +448,7 @@ pub mod pallet {
                     execute_call_info,
                     fee_transfer_call_info,
                     actual_fee,
-                    actual_resources: _actual_resources,
+                    actual_resources,
                 }) => {
                     log!(debug, "Transaction executed successfully: {:?}", execute_call_info);
 
@@ -432,6 +463,7 @@ pub mod pallet {
                         transaction_hash: transaction.hash,
                         tx_type: TxType::Invoke,
                         actual_fee: actual_fee.0.into(),
+                        actual_resources,
                     }
                 }
                 Err(e) => {
@@ -645,6 +677,20 @@ pub mod pallet {
             // Append the transaction to the pending transactions.
             Pending::<T>::try_append((transaction.clone(), TransactionReceiptWrapper::default()))
                 .or(Err(Error::<T>::TooManyPendingTransactions))?;
+
+            Ok(())
+        }
+
+        #[pallet::call_index(4)]
+        #[pallet::weight({0})]
+        pub fn set_carbon_offset(origin: OriginFor<T>, offset: CarbonOffset) -> DispatchResult {
+            ensure_none(origin)?;
+
+            let block = Self::current_block();
+
+            log!(info, "HWIOEIFHOWIEUHFIOUEHFUIOW, {:#?}", block.header());
+
+            CarbonOffsetting::<T>::set(offset);
 
             Ok(())
         }
@@ -906,10 +952,13 @@ impl<T: Config> Pallet<T> {
         let mut transactions: Vec<Transaction> = Vec::with_capacity(pending.len());
         let mut receipts: Vec<TransactionReceiptWrapper> = Vec::with_capacity(pending.len());
 
+        let mut resources = Resources::default();
         // For loop to iterate once on pending.
         for (transaction, receipt) in pending.into_iter() {
             transactions.push(transaction);
             receipts.push(receipt);
+
+            resources.l1_gas += 1;
         }
 
         let events = Self::pending_events();
@@ -931,6 +980,7 @@ impl<T: Config> Pallet<T> {
                 event_commitment.try_into().unwrap(),
                 protocol_version,
                 extra_data,
+                resources,
             ),
             // Safe because `transactions` is build from the `pending` bounded vec,
             // which has the same size limit of `MaxTransactions`

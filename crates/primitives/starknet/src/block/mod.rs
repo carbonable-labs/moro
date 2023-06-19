@@ -40,6 +40,7 @@ pub struct Block {
     transactions: BlockTransactions,
     /// The block transaction receipts.
     transaction_receipts: BlockTransactionReceipts,
+    test: u8,
 }
 
 impl Block {
@@ -54,7 +55,11 @@ impl Block {
         transactions: BlockTransactions,
         transaction_receipts: BlockTransactionReceipts,
     ) -> Self {
-        Self { header, transactions, transaction_receipts }
+        Self { header, transactions, transaction_receipts, test: 0 }
+    }
+
+    pub fn test(&mut self, val: u8) {
+        self.test = val;
     }
 
     /// Return a reference to the block header
