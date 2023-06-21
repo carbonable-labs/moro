@@ -6,7 +6,7 @@ use starknet_api::api_core::{ChainId, ContractAddress};
 use starknet_api::block::{BlockNumber, BlockTimestamp};
 use starknet_api::hash::StarkFelt;
 
-use crate::block::{Block, BlockTransactionReceipts, Header, MaxTransactions};
+use crate::block::{Block, BlockTransactionReceipts, Header, MaxTransactions, Resources};
 use crate::crypto::hash::pedersen::PedersenHasher;
 use crate::execution::types::{CallEntryPointWrapper, ContractAddressWrapper, Felt252Wrapper};
 use crate::transaction::types::{MaxArraySize, Transaction, TransactionReceiptWrapper, TxType};
@@ -24,6 +24,7 @@ fn generate_dummy_header() -> Header {
         Felt252Wrapper::from_dec_str("4").unwrap(),
         Some(1),
         Some(U256::from(3)),
+        Resources { l1_gas: 1, steps: 2, pedersen: 3, range_check: 4 },
     )
 }
 
