@@ -483,12 +483,13 @@ pub mod pallet {
 
             // Update the block execution resources.
             let tx_resources: Resources = tx_resources.into();
-            let mut new_resources = Self::block_resources();
-            new_resources.l1_gas += tx_resources.l1_gas;
-            new_resources.steps += tx_resources.steps;
-            new_resources.pedersen += tx_resources.pedersen;
-            new_resources.range_check += tx_resources.range_check;
-            BlockResources::<T>::set(new_resources);
+
+            BlockResources::<T>::mutate(|r| {
+                r.l1_gas += tx_resources.l1_gas;
+                r.steps += tx_resources.steps;
+                r.pedersen += tx_resources.pedersen;
+                r.range_check += tx_resources.range_check;
+            });
 
             // Append the transaction to the pending transactions.
             Pending::<T>::try_append((transaction, receipt)).map_err(|_| Error::<T>::TooManyPendingTransactions)?;
@@ -704,9 +705,7 @@ pub mod pallet {
         pub fn set_carbon_offset_unsigned(origin: OriginFor<T>, offset: CarbonOffsetCosts) -> DispatchResult {
             ensure_none(origin)?;
 
-            let block = Self::current_block();
-
-            log!(info, "Setting carbon offsetting costs, {:#?}", block.header());
+            log!(info, "Setting carbon offsetting costs at {:#?}", &offset);
 
             CarbonOffsetting::<T>::set(offset);
 
@@ -970,6 +969,7 @@ impl<T: Config> Pallet<T> {
         let mut transactions: Vec<Transaction> = Vec::with_capacity(pending.len());
         let mut receipts: Vec<TransactionReceiptWrapper> = Vec::with_capacity(pending.len());
         let resources = Self::block_resources();
+        log!(info, "Storing resources: {:#?}", &resources);
 
         // For loop to iterate once on pending.
         for (transaction, receipt) in pending.into_iter() {
@@ -1003,6 +1003,7 @@ impl<T: Config> Pallet<T> {
             BoundedVec::try_from(transactions).unwrap(),
             BoundedVec::try_from(receipts).unwrap(),
         );
+
         // Save the current block.
         CurrentBlock::<T>::put(block.clone());
         // Save the block number <> hash mapping.
