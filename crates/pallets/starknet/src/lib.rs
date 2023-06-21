@@ -89,6 +89,7 @@ use mp_starknet::transaction::types::{
     Transaction, TransactionExecutionInfoWrapper, TransactionReceiptWrapper, TxType,
 };
 use serde::{Deserialize, Serialize};
+use sp_api::BlockT;
 use sp_io::offchain_index;
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::traits::{SaturatedConversion, UniqueSaturatedInto};
@@ -130,7 +131,7 @@ macro_rules! log {
     Default,
     scale_codec::MaxEncodedLen,
 )]
-pub struct CarbonOffset {
+pub struct CarbonOffsetCosts {
     l1_gas: u64,
     steps: u64,
     pedersen_builtin: u64,
@@ -211,9 +212,9 @@ pub mod pallet {
         fn offchain_worker(n: T::BlockNumber) {
             log!(info, "Running offchain worker at block {:?}.", n);
 
-            Self::set_carbon_offset(
+            Self::set_carbon_offset_unsigned(
                 OriginFor::<T>::none(),
-                CarbonOffset { l1_gas: 11, steps: 3, ..Default::default() },
+                CarbonOffsetCosts { l1_gas: 11, steps: 3, ..Default::default() },
             );
 
             match Self::process_l1_messages() {
@@ -228,10 +229,6 @@ pub mod pallet {
         }
     }
 
-    #[pallet::storage]
-    #[pallet::getter(fn carbon_offsetting)]
-    pub(super) type CarbonOffsetting<T: Config> = StorageValue<_, CarbonOffset, ValueQuery>;
-
     /// The Starknet pallet storage items.
     /// STORAGE
     /// Current building block's transactions.
@@ -239,6 +236,16 @@ pub mod pallet {
     #[pallet::getter(fn pending)]
     pub(super) type Pending<T: Config> =
         StorageValue<_, BoundedVec<(Transaction, TransactionReceiptWrapper), MaxTransactions>, ValueQuery>;
+
+    /// The current Carbon offsetting costs per resource
+    #[pallet::storage]
+    #[pallet::getter(fn carbon_offsetting)]
+    pub(super) type CarbonOffsetting<T: Config> = StorageValue<_, CarbonOffsetCosts, ValueQuery>;
+
+    /// Current block execution resources used.
+    #[pallet::storage]
+    #[pallet::getter(fn block_resources)]
+    pub(super) type BlockResources<T: Config> = StorageValue<_, Resources, ValueQuery>;
 
     /// Current building block's events.
     // TODO: This is redundant information but more performant
@@ -478,7 +485,7 @@ pub mod pallet {
             let transaction: Transaction = transaction.from_invoke(chain_id);
             let call_info =
                 transaction.execute(&mut BlockifierStateAdapter::<T>::default(), &block_context, TxType::Invoke, None);
-            let receipt = match call_info {
+            let (receipt, tx_resources) = match call_info {
                 Ok(TransactionExecutionInfoWrapper {
                     validate_call_info: _validate_call_info,
                     execute_call_info,
@@ -494,19 +501,30 @@ pub mod pallet {
                         fee_transfer_call_info,
                     )?;
 
-                    TransactionReceiptWrapper {
-                        events: BoundedVec::try_from(events).map_err(|_| Error::<T>::ReachedBoundedVecLimit)?,
-                        transaction_hash: transaction.hash,
-                        tx_type: TxType::Invoke,
-                        actual_fee: actual_fee.0.into(),
+                    (
+                        TransactionReceiptWrapper {
+                            events: BoundedVec::try_from(events).map_err(|_| Error::<T>::ReachedBoundedVecLimit)?,
+                            transaction_hash: transaction.hash,
+                            tx_type: TxType::Invoke,
+                            actual_fee: actual_fee.0.into(),
+                        },
                         actual_resources,
-                    }
+                    )
                 }
                 Err(e) => {
                     log!(error, "Transaction execution failed: {:?}", e);
                     return Err(Error::<T>::TransactionExecutionFailed.into());
                 }
             };
+
+            // Update the block execution resources.
+            let tx_resources: Resources = tx_resources.into();
+            let mut new_resources = Self::block_resources();
+            new_resources.l1_gas += tx_resources.l1_gas;
+            new_resources.steps += tx_resources.steps;
+            new_resources.pedersen += tx_resources.pedersen;
+            new_resources.range_check += tx_resources.range_check;
+            BlockResources::<T>::set(new_resources);
 
             // Append the transaction to the pending transactions.
             Pending::<T>::try_append((transaction, receipt)).map_err(|_| Error::<T>::TooManyPendingTransactions)?;
@@ -719,12 +737,12 @@ pub mod pallet {
 
         #[pallet::call_index(4)]
         #[pallet::weight({0})]
-        pub fn set_carbon_offset(origin: OriginFor<T>, offset: CarbonOffset) -> DispatchResult {
+        pub fn set_carbon_offset_unsigned(origin: OriginFor<T>, offset: CarbonOffsetCosts) -> DispatchResult {
             ensure_none(origin)?;
 
             let block = Self::current_block();
 
-            log!(info, "HWIOEIFHOWIEUHFIOUEHFUIOW, {:#?}", block.header());
+            log!(info, "Setting carbon offsetting costs, {:#?}", block.header());
 
             CarbonOffsetting::<T>::set(offset);
 
@@ -992,14 +1010,12 @@ impl<T: Config> Pallet<T> {
 
         let mut transactions: Vec<Transaction> = Vec::with_capacity(pending.len());
         let mut receipts: Vec<TransactionReceiptWrapper> = Vec::with_capacity(pending.len());
+        let resources = Self::block_resources();
 
-        let mut resources = Resources::default();
         // For loop to iterate once on pending.
         for (transaction, receipt) in pending.into_iter() {
             transactions.push(transaction);
             receipts.push(receipt);
-
-            resources.l1_gas += 1;
         }
 
         let events = Self::pending_events();
@@ -1033,6 +1049,7 @@ impl<T: Config> Pallet<T> {
         BlockHash::<T>::insert(block_number, blockhash);
         Pending::<T>::kill();
         PendingEvents::<T>::kill();
+        BlockResources::<T>::kill();
 
         let digest = DigestItem::Consensus(MADARA_ENGINE_ID, mp_digest_log::Log::Block(block).encode());
         frame_system::Pallet::<T>::deposit_log(digest);
