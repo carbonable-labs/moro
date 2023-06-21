@@ -1,3 +1,6 @@
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+
 use blockifier::block_context::BlockContext;
 use sp_core::U256;
 use starknet_api::api_core::{ChainId, ContractAddress};
@@ -19,11 +22,27 @@ use crate::traits::hash::HasherT;
     scale_codec::MaxEncodedLen,
 )]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+/// Starknet block resources definition.
 pub struct Resources {
+    /// The total L1 gas used in this block.
     pub l1_gas: u64,
+    /// The total number of steps used in this block.
     pub steps: u64,
+    /// The total number of pedersen builtins used in this block.
     pub pedersen: u64,
+    /// The total number of range check builtins used in this block.
     pub range_check: u64,
+}
+
+impl From<BTreeMap<String, usize>> for Resources {
+    fn from(map: BTreeMap<String, usize>) -> Self {
+        Self {
+            l1_gas: map.get("l1_gas").unwrap_or(&0).clone() as u64,
+            steps: map.get("steps").unwrap_or(&0).clone() as u64,
+            pedersen: map.get("pedersen").unwrap_or(&0).clone() as u64,
+            range_check: map.get("range_check").unwrap_or(&0).clone() as u64,
+        }
+    }
 }
 
 #[derive(
@@ -62,7 +81,7 @@ pub struct Header {
     pub protocol_version: Option<u8>,
     /// Extraneous data that might be useful for running transactions
     pub extra_data: Option<U256>,
-    /// Sum of the block tx resources
+    /// The total block execution resources
     pub total_resources: Resources,
 }
 
@@ -160,6 +179,7 @@ fn test_header_hash() {
     let event_count = 1;
     let event_commitment = Felt252Wrapper::try_from(&[4; 32]).unwrap();
     let protocol_version = Some(1);
+    let total_resources = Resources::default();
     let extra_data = None;
 
     let header = Header::new(
@@ -174,6 +194,7 @@ fn test_header_hash() {
         event_commitment,
         protocol_version,
         extra_data,
+        total_resources,
     );
 
     let hasher = crate::crypto::hash::pedersen::PedersenHasher::default();
