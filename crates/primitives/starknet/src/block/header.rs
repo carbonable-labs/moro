@@ -37,10 +37,10 @@ pub struct Resources {
 impl From<BTreeMap<String, usize>> for Resources {
     fn from(map: BTreeMap<String, usize>) -> Self {
         Self {
-            l1_gas: map.get("l1_gas").unwrap_or(&0).clone() as u64,
-            steps: map.get("steps").unwrap_or(&0).clone() as u64,
-            pedersen: map.get("pedersen").unwrap_or(&0).clone() as u64,
-            range_check: map.get("range_check").unwrap_or(&0).clone() as u64,
+            l1_gas: map.get("l1_gas_usage").unwrap_or(&0).clone() as u64,
+            steps: map.get("n_steps").unwrap_or(&0).clone() as u64,
+            pedersen: map.get("pedersen_builtin").unwrap_or(&0).clone() as u64,
+            range_check: map.get("range_check_builtin").unwrap_or(&0).clone() as u64,
         }
     }
 }
