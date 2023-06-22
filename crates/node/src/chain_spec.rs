@@ -212,6 +212,13 @@ fn testnet_genesis(
     let public_key = Felt252Wrapper::from_hex_be(PUBLIC_KEY).unwrap();
     let chain_id = Felt252Wrapper(FieldElement::from_byte_slice_be(&CHAIN_ID_STARKNET_TESTNET.to_be_bytes()).unwrap());
 
+    // CARBONABLE POOL CONTRACT
+    // TODO(moro): use moro_carbonable_pool_ERC20.sierra.json when Cairo 1 available
+    let carbon_pool_class: ContractClassWrapper =
+        get_contract_class(include_bytes!("../../../cairo-contracts/build/CarbonPool.json")).try_into().unwrap();
+    let carbon_pool_hash = Felt252Wrapper::from_hex_be(CARBON_POOL_CLASS_HASH).unwrap();
+    let carbon_pool_contract_address = Felt252Wrapper::from_hex_be(CARBON_POOL_ADDRESS).unwrap();
+
     RuntimeGenesisConfig {
         system: SystemConfig {
             // Add Wasm runtime to storage.
@@ -233,6 +240,7 @@ fn testnet_genesis(
                 (argent_account_address, argent_account_class_hash),
                 (oz_account_address, oz_account_class_hash),
                 (udc_contract_address, udc_class_hash),
+                (carbon_pool_contract_address, carbon_pool_hash),
             ],
             contract_classes: vec![
                 (no_validate_account_class_hash, no_validate_account_class),
@@ -244,6 +252,7 @@ fn testnet_genesis(
                 (fee_token_class_hash, erc20_class),
                 (nft_class_hash, erc721_class),
                 (udc_class_hash, udc_class),
+                (carbon_pool_hash, carbon_pool_class),
             ],
             storage: vec![
                 (
