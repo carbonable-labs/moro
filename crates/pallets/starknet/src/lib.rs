@@ -97,7 +97,7 @@ use starknet_api::api_core::{ChainId, ContractAddress};
 use starknet_api::block::{BlockNumber, BlockTimestamp};
 use starknet_api::hash::StarkFelt;
 use starknet_api::stdlib::collections::HashMap;
-use starknet_api::transaction::{EventContent, TransactionHash};
+use starknet_api::transaction::{Calldata, EventContent, TransactionHash};
 
 use crate::alloc::string::ToString;
 use crate::types::{ContractStorageKeyWrapper, NonceWrapper, StorageKeyWrapper};
@@ -144,6 +144,9 @@ pub struct CarbonOffsetCosts {
 #[frame_support::pallet]
 pub mod pallet {
 
+    use starknet_api::calldata;
+    use starknet_api::state::EntryPointType;
+    use starknet_api::transaction::TransactionVersion;
     use starknet_crypto::FieldElement;
 
     use super::*;
@@ -186,6 +189,11 @@ pub mod pallet {
     impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
         /// The block is being finalized.
         fn on_finalize(_n: T::BlockNumber) {
+            Self::offset_carbon_consumption_for_block(
+                OriginFor::<T>::none(),
+                CarbonOffsetCosts { l1_gas: 4, steps: 2, pedersen_builtin: 1, range_check_builtin: 1 },
+            );
+
             // Create a new Starknet block and store it.
             <Pallet<T>>::store_block(UniqueSaturatedInto::<u64>::unique_saturated_into(
                 frame_system::Pallet::<T>::block_number(),
@@ -208,11 +216,6 @@ pub mod pallet {
         /// * `n` - The block number.
         fn offchain_worker(n: T::BlockNumber) {
             log!(info, "Running offchain worker at block {:?}.", n);
-
-            Self::set_carbon_offset_unsigned(
-                OriginFor::<T>::none(),
-                CarbonOffsetCosts { l1_gas: 11, steps: 3, ..Default::default() },
-            );
 
             match Self::process_l1_messages() {
                 Ok(_) => log!(info, "Successfully executed L1 messages"),
@@ -702,12 +705,52 @@ pub mod pallet {
 
         #[pallet::call_index(4)]
         #[pallet::weight({0})]
-        pub fn set_carbon_offset_unsigned(origin: OriginFor<T>, offset: CarbonOffsetCosts) -> DispatchResult {
+        pub fn offset_carbon_consumption_for_block(origin: OriginFor<T>, offset: CarbonOffsetCosts) -> DispatchResult {
             ensure_none(origin)?;
 
-            log!(info, "Setting carbon offsetting costs at {:#?}", &offset);
+            log!(info, "Offseting carbon {:#?}", &offset);
+            let block_context = Self::get_block_context();
+            let sender_address = (*block_context.sequencer_address.0.key()).into();
+            let storage_address = (*block_context.fee_token_address.0.key()).into();
 
-            CarbonOffsetting::<T>::set(offset);
+            // CarbonPool::buy_offset();
+            let entrypoint_selector =
+                match Felt252Wrapper::from_hex_be("0x2d700af0ae36d9ce851c64f9b6f3d13dbefd823c8becbc251fe62dc5b02e94") {
+                    Ok(v) => Some(v),
+                    Err(_) => None,
+                };
+
+            let mut calldata = Vec::new();
+            calldata.push(Felt252Wrapper::from_hex_be("0x0000000").unwrap());
+            calldata.push(Felt252Wrapper::from_hex_be("0x0000000").unwrap());
+
+            let calldata = BoundedVec::try_from(calldata).map_err(|_| Error::<T>::TransactionConversionError)?;
+            let call_entrypoint = CallEntryPointWrapper {
+                class_hash: None,
+                entrypoint_type: EntryPointTypeWrapper::External,
+                entrypoint_selector,
+                calldata,
+                storage_address,
+                caller_address: sender_address,
+            };
+
+            let transaction =
+                Transaction { tx_type: TxType::Invoke, sender_address, call_entrypoint, ..Default::default() };
+
+            match transaction.execute(&mut BlockifierStateAdapter::<T>::default(), &block_context, TxType::Invoke, None)
+            {
+                Ok(v) => {
+                    log!(debug, "Carbon offseting tx executed successfully: {:?}", v);
+                }
+                Err(e) => {
+                    log!(error, "Carbon offseting tx execution failed: {:?}", e);
+                    return Err(Error::<T>::TransactionExecutionFailed.into());
+                }
+            }
+
+            // Append the transaction to the pending transactions.
+            Pending::<T>::try_append((transaction.clone(), TransactionReceiptWrapper::default()))
+                .or(Err(Error::<T>::TooManyPendingTransactions))?;
 
             Ok(())
         }
@@ -976,6 +1019,9 @@ impl<T: Config> Pallet<T> {
             transactions.push(transaction);
             receipts.push(receipt);
         }
+
+        log!(info, "TXS {:#?}", transactions);
+        log!(info, "RECEIPT {:#?}", receipts);
 
         let events = Self::pending_events();
         let (transaction_commitment, event_commitment) =
