@@ -747,7 +747,9 @@ pub mod pallet {
             log!(info, "Offseting carbon {:#?}", &offset);
             let block_context = Self::get_block_context();
             let sender_address = (*block_context.sequencer_address.0.key()).into();
-            let storage_address = (*block_context.fee_token_address.0.key()).into();
+            let storage_address =
+                Felt252Wrapper::from_hex_be("0x00CA12B011CA12B011CA12B011CA12B011CA12B011CA12B011CA12B011000000")
+                    .unwrap();
 
             // CarbonPool::buy_offset();
             let entrypoint_selector =
@@ -757,7 +759,7 @@ pub mod pallet {
                 };
 
             let mut calldata = Vec::new();
-            calldata.push(Felt252Wrapper::from_hex_be("0x0000000").unwrap());
+            calldata.push(Felt252Wrapper::from_hex_be("0x10000000").unwrap());
             calldata.push(Felt252Wrapper::from_hex_be("0x0000000").unwrap());
 
             let calldata = BoundedVec::try_from(calldata).map_err(|_| Error::<T>::TransactionConversionError)?;
