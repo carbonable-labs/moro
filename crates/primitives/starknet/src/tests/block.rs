@@ -133,6 +133,7 @@ fn test_real_header_hash() {
     let event_commitment =
         Felt252Wrapper::from_hex_be("0x2043ba1ef46882ce1dbb17b501fffa4b71f87f618e8f394e9605959d92efdf6").unwrap();
     let protocol_version = None;
+    let total_resources = Resources::default();
     let extra_data = None;
 
     let header = Header::new(
@@ -147,6 +148,7 @@ fn test_real_header_hash() {
         event_commitment,
         protocol_version,
         extra_data,
+        total_resources,
     );
 
     let expected_hash =
