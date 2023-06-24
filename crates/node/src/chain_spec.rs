@@ -1,8 +1,8 @@
 use blockifier::execution::contract_class::ContractClass;
 use madara_runtime::{AuraConfig, EnableManualSeal, GrandpaConfig, RuntimeGenesisConfig, SystemConfig, WASM_BINARY};
 use mp_starknet::execution::types::{ContractClassWrapper, Felt252Wrapper};
+use mp_starknet::sequencer_address::DEFAULT_SEQUENCER_ADDRESS;
 use pallet_starknet::types::ContractStorageKeyWrapper;
-use pallet_starknet::SEQUENCER_ADDRESS;
 use sc_service::ChainType;
 use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -220,7 +220,7 @@ fn testnet_genesis(
     let carbon_pool_hash = Felt252Wrapper::from_hex_be(CARBON_POOL_CLASS_HASH).unwrap();
     let carbon_pool_contract_address = Felt252Wrapper::from_hex_be(CARBON_POOL_ADDRESS).unwrap();
 
-    let sequencer_address = Felt252Wrapper::try_from(&SEQUENCER_ADDRESS).unwrap();
+    // let sequencer_address = Felt252Wrapper::try_from(&DEFAULT_SEQUENCER_ADDRESS).unwrap();
 
     RuntimeGenesisConfig {
         system: SystemConfig {
@@ -309,7 +309,7 @@ fn testnet_genesis(
                     get_storage_key(
                         &fee_token_address,
                         "ERC20_allowance",
-                        &[sequencer_address.clone(), carbon_pool_contract_address.clone()],
+                        &[oz_account_address.clone(), carbon_pool_contract_address.clone()],
                         0,
                     ),
                     Felt252Wrapper::from(u128::MAX),
@@ -318,7 +318,7 @@ fn testnet_genesis(
                     get_storage_key(
                         &fee_token_address,
                         "ERC20_allowance",
-                        &[sequencer_address.clone(), carbon_pool_contract_address.clone()],
+                        &[oz_account_address.clone(), carbon_pool_contract_address.clone()],
                         1,
                     ),
                     Felt252Wrapper::from(u128::MAX),
