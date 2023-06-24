@@ -88,18 +88,14 @@ use mp_starknet::transaction::types::{
     DeclareTransaction, DeployAccountTransaction, EventError, EventWrapper as StarknetEventType, InvokeTransaction,
     Transaction, TransactionExecutionInfoWrapper, TransactionReceiptWrapper, TxType,
 };
-use serde::{Deserialize, Serialize};
-use sp_api::BlockT;
-use sp_io::offchain_index;
-use sp_runtime::offchain::storage::StorageValueRef;
-use sp_runtime::traits::{SaturatedConversion, UniqueSaturatedInto};
+use sp_runtime::traits::UniqueSaturatedInto;
 use sp_runtime::DigestItem;
 use sp_std::result;
 use starknet_api::api_core::{ChainId, ContractAddress};
 use starknet_api::block::{BlockNumber, BlockTimestamp};
 use starknet_api::hash::StarkFelt;
 use starknet_api::stdlib::collections::HashMap;
-use starknet_api::transaction::{Calldata, EventContent, TransactionHash};
+use starknet_api::transaction::{EventContent, TransactionHash};
 
 use crate::alloc::string::ToString;
 use crate::types::{ContractStorageKeyWrapper, NonceWrapper, StorageKeyWrapper};
@@ -739,41 +735,56 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(4)]
+        #[pallet::call_index(5)]
         #[pallet::weight({0})]
         pub fn offset_carbon_consumption_for_block(origin: OriginFor<T>, offset: CarbonOffsetCosts) -> DispatchResult {
             ensure_none(origin)?;
 
             log!(info, "Offseting carbon {:#?}", &offset);
             let block_context = Self::get_block_context();
-            let sender_address = (*block_context.sequencer_address.0.key()).into();
-            let storage_address =
+            let sender_address = Felt252Wrapper::from(3_u128);
+            // (*block_context.sequencer_address.0.key()).into();
+            let carbon_pool_address =
                 Felt252Wrapper::from_hex_be("0x00CA12B011CA12B011CA12B011CA12B011CA12B011CA12B011CA12B011000000")
                     .unwrap();
+            let carbon_bool_class_hash = Felt252Wrapper::from_hex_be("0xCA12B011").unwrap();
 
             // CarbonPool::buy_offset();
             let entrypoint_selector =
-                match Felt252Wrapper::from_hex_be("0x2d700af0ae36d9ce851c64f9b6f3d13dbefd823c8becbc251fe62dc5b02e94") {
-                    Ok(v) => Some(v),
-                    Err(_) => None,
-                };
+                Felt252Wrapper::from_hex_be("0x2d700af0ae36d9ce851c64f9b6f3d13dbefd823c8becbc251fe62dc5b02e94")
+                    .unwrap();
 
             let mut calldata = Vec::new();
-            calldata.push(Felt252Wrapper::from_hex_be("0x10000000").unwrap());
-            calldata.push(Felt252Wrapper::from_hex_be("0x0000000").unwrap());
+
+            //  calldata.push(carbon_pool_address); // to
+            //  calldata.push(entrypoint_selector); // selector
+            //  calldata.push(Felt252Wrapper::from(2_u128)); // calldata len
+            calldata.push(Felt252Wrapper::from(10000000_u128));
+            calldata.push(Felt252Wrapper::from(0_u8));
 
             let calldata = BoundedVec::try_from(calldata).map_err(|_| Error::<T>::TransactionConversionError)?;
             let call_entrypoint = CallEntryPointWrapper {
-                class_hash: None,
+                class_hash: None, // Some(carbon_bool_class_hash),
                 entrypoint_type: EntryPointTypeWrapper::External,
-                entrypoint_selector,
+                entrypoint_selector: None, // Some(entrypoint_selector),
                 calldata,
-                storage_address,
+                storage_address: carbon_pool_address,
                 caller_address: sender_address,
+                initial_gas: Felt252Wrapper::from(0_u128),
             };
 
             let transaction =
-                Transaction { tx_type: TxType::Invoke, sender_address, call_entrypoint, ..Default::default() };
+             //   Transaction { tx_type: TxType::Invoke, sender_address, call_entrypoint, ..Default::default() };
+                Transaction {
+                    tx_type: TxType::Invoke,
+                    sender_address,
+                    call_entrypoint,
+                    contract_class: None,
+                    max_fee: Felt252Wrapper::from(10000000000_u128),
+                    ..Default::default()
+                };
+
+            log!(info, "Executing carbon offseting tx: {:?}", &transaction);
 
             match transaction.execute(&mut BlockifierStateAdapter::<T>::default(), &block_context, TxType::Invoke, None)
             {
@@ -1063,8 +1074,8 @@ impl<T: Config> Pallet<T> {
             receipts.push(receipt);
         }
 
-        log!(info, "TXS {:#?}", transactions);
-        log!(info, "RECEIPT {:#?}", receipts);
+        // log!(info, "TXS {:#?}", transactions);
+        // log!(info, "RECEIPT {:#?}", receipts);
 
         let events = Self::pending_events();
         let (transaction_commitment, event_commitment) =
@@ -1097,6 +1108,7 @@ impl<T: Config> Pallet<T> {
         BlockHash::<T>::insert(block_number, blockhash);
         Pending::<T>::kill();
         PendingEvents::<T>::kill();
+
         BlockResources::<T>::kill();
 
         let digest = DigestItem::Consensus(MADARA_ENGINE_ID, mp_digest_log::Log::Block(block).encode());
