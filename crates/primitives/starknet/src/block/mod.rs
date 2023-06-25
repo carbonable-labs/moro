@@ -58,6 +58,7 @@ impl Block {
         Self { header, transactions, transaction_receipts, test: 0 }
     }
 
+    /// A test function
     pub fn test(&mut self, val: u8) {
         self.test = val;
     }
