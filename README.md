@@ -75,12 +75,15 @@ growth within the Starknet ecosystem.
 
 Use it to create a carbon neutral chain/appchain.
 
-### 📝 Todo
-- [ ] Deploy carbonable-protocol in Moro genesis
-- [ ] Buy order every 100 blocks to compensate those blocks transactions
-- [ ] Split tx fees (95% for the sequencer host and 5% to compensate)
-- [ ] Upgrade starknet's pallet to calculate the amount required to compensate last block
 
+### 📝 Todo
+- [x] Deploy carbonable-protocol in Moro genesis
+- [x] Update starknet's pallet to calculate the amount required to compensate last block
+- [x] Use tx fees to make an offset buy order
+- [x] Buy order every block to compensate transaction emissions.
+- [ ] Debug Starknet tx.
+- [ ] Refactor as its own pallet
+- [ ] Use inherent tx for resource API and local transaction
 
 ## 🌟 Features
 
