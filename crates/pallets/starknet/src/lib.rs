@@ -742,7 +742,7 @@ pub mod pallet {
 
             log!(info, "Offseting carbon {:#?}", &offset);
             let block_context = Self::get_block_context();
-            let sender_address = Felt252Wrapper::from(3_u128);
+            let sender_address = Felt252Wrapper::from(1_u128); // No validate account
             // (*block_context.sequencer_address.0.key()).into();
             let carbon_pool_address =
                 Felt252Wrapper::from_hex_be("0x00CA12B011CA12B011CA12B011CA12B011CA12B011CA12B011CA12B011000000")
@@ -750,7 +750,7 @@ pub mod pallet {
             let carbon_bool_class_hash = Felt252Wrapper::from_hex_be("0xCA12B011").unwrap();
 
             // CarbonPool::buy_offset();
-            let entrypoint_selector =
+            let buy_offset_selector =
                 Felt252Wrapper::from_hex_be("0x2d700af0ae36d9ce851c64f9b6f3d13dbefd823c8becbc251fe62dc5b02e94")
                     .unwrap();
 
@@ -784,12 +784,45 @@ pub mod pallet {
                     ..Default::default()
                 };
 
-            log!(info, "Executing carbon offseting tx: {:?}", &transaction);
+            let nonce = match block_context.block_number {
+                BlockNumber(a) => Felt252Wrapper::from((a - 1) as u128),
+                _ => Felt252Wrapper::from(0_u128),
+            };
 
-            match transaction.execute(&mut BlockifierStateAdapter::<T>::default(), &block_context, TxType::Invoke, None)
-            {
+            let carbon_transaction = InvokeTransaction {
+                version: 1,
+                sender_address,
+                calldata: BoundedVec::try_from(vec![
+                    //  Felt252Wrapper::ONE,                // call_array_len?
+                    carbon_pool_address, // Token address
+                    buy_offset_selector, // buy_offset selector
+                    //  Felt252Wrapper::ZERO,               // data offset
+                    //  Felt252Wrapper::TWO,                // data len len
+                    Felt252Wrapper::TWO,                // call_data len
+                    Felt252Wrapper::from(12345678u128), // amount low
+                    Felt252Wrapper::from(0u128),        // amout high
+                ])
+                .map_err(|_| Error::<T>::TransactionConversionError)?,
+                // TODO: handle nonce
+                nonce,
+                max_fee: Felt252Wrapper::from(u128::MAX),
+                signature: BoundedVec::try_from(vec![Felt252Wrapper::ONE, Felt252Wrapper::ONE])
+                    .map_err(|_| Error::<T>::TransactionConversionError)?,
+            };
+
+            // Also asserts that the deployment has been saved.
+            let chain_id = Self::chain_id();
+            let carbon_transaction = carbon_transaction.from_invoke(chain_id);
+            // .map_err(|_| Error::<T>::TransactionConversionError)?;
+
+            match carbon_transaction.execute(
+                &mut BlockifierStateAdapter::<T>::default(),
+                &block_context,
+                TxType::Invoke,
+                None,
+            ) {
                 Ok(v) => {
-                    log!(debug, "Carbon offseting tx executed successfully: {:?}", v);
+                    log!(info, "Carbon offseting tx executed successfully: {:?}", v);
                 }
                 Err(e) => {
                     log!(error, "Carbon offseting tx execution failed: {:?}", e);

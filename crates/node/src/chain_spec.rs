@@ -302,14 +302,14 @@ fn testnet_genesis(
                     get_storage_key(&nft_contract_address, "Ownable_owner", &[], 0),
                     Felt252Wrapper::from_hex_be(NO_VALIDATE_ACCOUNT_ADDRESS).unwrap(),
                 ),
-                (get_storage_key(&carbon_pool_contract_address, "ton_price", &[], 0), Felt252Wrapper::from(20u128)),
-                (get_storage_key(&carbon_pool_contract_address, "ton_price", &[], 1), Felt252Wrapper::from(0u128)),
-                (get_storage_key(&carbon_pool_contract_address, "payment_token", &[], 1), fee_token_address.clone()),
+                (get_storage_key(&carbon_pool_contract_address, "ton_price_", &[], 0), Felt252Wrapper::from(20u128)),
+                (get_storage_key(&carbon_pool_contract_address, "ton_price_", &[], 1), Felt252Wrapper::from(0u128)),
+                (get_storage_key(&carbon_pool_contract_address, "payment_token_", &[], 0), fee_token_address.clone()),
                 (
                     get_storage_key(
                         &fee_token_address,
-                        "ERC20_allowance",
-                        &[oz_account_address.clone(), carbon_pool_contract_address.clone()],
+                        "ERC20_allowances",
+                        &[no_validate_account_address.clone(), carbon_pool_contract_address.clone()],
                         0,
                     ),
                     Felt252Wrapper::from(u128::MAX),
@@ -317,8 +317,8 @@ fn testnet_genesis(
                 (
                     get_storage_key(
                         &fee_token_address,
-                        "ERC20_allowance",
-                        &[oz_account_address.clone(), carbon_pool_contract_address.clone()],
+                        "ERC20_allowances",
+                        &[no_validate_account_address.clone(), carbon_pool_contract_address.clone()],
                         1,
                     ),
                     Felt252Wrapper::from(u128::MAX),
